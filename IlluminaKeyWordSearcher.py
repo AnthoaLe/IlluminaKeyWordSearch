@@ -7,6 +7,15 @@ from datetime import datetime, timezone, timedelta  # Immensely useful for anyth
 import re                                           # Simplifies some string operations by utilizing patterns
 from typing import Tuple, List                      # Personal preference, helps with function syntax
 
+"""
+TODO LIST: (MINOR ORDER OF PRIORITY)
+1.  Notify user if any folders do not contain the keyword
+    a. Use a checkbox to allow log files that do not contain the keywords to appear in the output file.
+    b. Output to a separate text file the log files that do not contain the keywords.
+2.  Display drop down list with text of all the selected files.
+3.  PROGRAM ALWAYS ASSUME LAST OCCURRENCE DATE OCCURS AFTER FIRST OCCURRENCE DATE. OPPOSITE CASE IS POSSIBLE.
+4.  Implement try-except function calls and appropriate error responses.
+"""
 
 def findFirstFindLastDates(filePath: str, firstKeyWord: str, lastKeyWord: str) -> Tuple[str, str]:
     """Finds the first occurrence of firstKeyWord and last occurrence of lastKeyWord.
@@ -24,7 +33,7 @@ def findFirstFindLastDates(filePath: str, firstKeyWord: str, lastKeyWord: str) -
     always be safe to specify newline='', since the csv module does its own (universal) newline handling.
     """
 
-    firstDate = None                # Will use to check that the first occurrence and last occurrence
+    firstDate = None                # Will use to check that the first occurrence and last occurrence \
     lastDate = None                 # actually exist.
     # mode='r' reads the file with UTF-8 BOM encoding
     with open(filePath, mode='r', encoding='utf-8-sig', newline='') as csvDataFile:     # [1]
@@ -65,6 +74,14 @@ def userInputWindowLayOut() -> sg.Window:
     return sg.Window('Key Words Search', layout)        # Window is titled, and has the given layout
 
 
+def scanCompleteWindow() -> sg.Window:
+
+    layout = [[sg.Text("Program has finished scanning and outputted a text file")],
+              [sg.Exit(tooltip="Closes the window")]]
+
+    return sg.Window('Scan Complete', layout)
+
+
 def formatTime() -> str:
     """Finds the system's local time and returns it adjusted against UTC+00.
 
@@ -79,7 +96,7 @@ def formatTime() -> str:
     return localTime.isoformat(timespec='seconds').replace(':', '')
 
 
-def readLogs(listOfLogStringPaths: list, firstKeyWord: str, lastKeyWord: str) -> List[Tuple[str, str]]:
+def readLogs(listOfLogStringPaths: list, firstKeyWord: str, lastKeyWord: str) -> List[Tuple[str, str, str]]:
     """Given a list of log file string paths and two keywords, creates and returns a list of \
     all of the occurrences of the two keywords (first occurrence and last occurrence respectively).
 
@@ -87,24 +104,21 @@ def readLogs(listOfLogStringPaths: list, firstKeyWord: str, lastKeyWord: str) ->
     firstKeyWord - (string) - the first key word we are interested in.
     lastKeyWord - (string) -the last key word we are interested in.
 
-    Iterate through the log files string paths in the given list calling findFirstFindLastDates() on each log.
-    Store each set of occurrences and return a list of 2-tuples of the first and last occurrences.
+    Iterate through the log files string paths in the given list calling findFirstFindLastDates() on each log. \
+    Store the name of the file and each set of occurrences then return a list of 3-tuples of the first and \
+    last occurrences.
     """
 
     listOfOccurrences = []
     for logStringPath in listOfLogStringPaths:
         if os.path.isfile(logStringPath) and logStringPath.endswith('.log'):  # ensures path is to a .log file
-            occurrence = findFirstFindLastDates(logStringPath, firstKeyWord, lastKeyWord)
+            fileName = os.path.basename(logStringPath)
+            occurrence = (fileName,) + findFirstFindLastDates(logStringPath, firstKeyWord, lastKeyWord)
             if None not in occurrence:  # checks that both occurrences exist
                 listOfOccurrences.append(occurrence)
-        # with os.scandir(logStringPath) as logFile:
-        #     for logFile in filePath:               # iterates over the log files in the directory
-        #         if logFile.is_file() and logFile.name.endswith('.log'):     # ensures logFile is a .log file
-        #             occurrence = findFirstFindLastDates(logFile, firstKeyWord, lastKeyWord)
-        #             if None not in occurrence:      # checks that both occurrences exist
-        #                 listOfOccurrences.append(occurrence)
 
-    return listOfOccurrences    # returns a list of 2-tuples containing the string dates of the occurrences
+    return listOfOccurrences    # returns a list of 3-tuples containing the string log path names and dates \
+                                # of the occurrences
 
 
 def findTimeDifference(occurrence: Tuple[str, str]) -> timedelta:
@@ -140,16 +154,17 @@ def findTimeDifference(occurrence: Tuple[str, str]) -> timedelta:
     return lastDateTime - firstDateTime             # Difference is timedelta object
 
 
-def writeTimeStampsToFile(listOfOccurrences: List[Tuple[str, str]]) -> None:
+def writeToFile(listOfOccurrences: List[Tuple[str, str, str]]) -> None:
     """Given a list of occurrences write the differences in time to a text file.
 
-    listOfOccurrences - (List[Tuple[str, str]]) - list of 2-tuples containing the string dates of the \
-    occurrences.
+    listOfOccurrences - (List[Tuple[str, str, str]]) - list of 3-tuples containing the log string path and \
+    dates of the occurrences.
 
     Creates an output text file in the current working directory named "Time Stamps YYYY-MM-DDTHHMMSSZ.txt" \
     with UTF BOM encoding. Iterates over each occurrence, calls findTimeDifference() to create a timedelta \
     object and typecasts the timedelta object to a string, which returns a difference in time in ISO 8601 \
-    format. Finally, it writes the difference in time to the output text file.
+    format. Finally, it writes the name of the log file and its associated difference in time to the output \
+    text file.
 
     [1] If newline='' is not specified, newlines embedded inside quoted fields will not be interpreted \
     correctly, and on platforms that use \r\n line endings on write an extra \r will be added. It should \
@@ -158,10 +173,13 @@ def writeTimeStampsToFile(listOfOccurrences: List[Tuple[str, str]]) -> None:
 
     outputTextFile = "Time Stamps " + formatTime() + ".txt"       # Generates the name of the text file
     # mode='x' creates a new file and prepares to write into it with UTF-8 BOM encoding
-    with open(outputTextFile, mode='x', encoding='utf-8-sig', newline= '') as outputTextFile:   # [1]
+    with open(outputTextFile, mode='x', encoding='utf-8-sig', newline= '') as csvOutputFile:   # [1]
+        csvWriter = csv.writer(csvOutputFile, dialect=csv.excel_tab)
         for occurrence in listOfOccurrences:                # Iterates over the occurrences in each file
             # Writes the time difference to the file and separates each one with newline character '\n'
-            outputTextFile.write(str(findTimeDifference(occurrence)) + '\n')
+            # slice [1:] to only get the 2-tuple of the first and last occurrence
+            csvWriter.writerow([occurrence[0], occurrence[1], occurrence[2],
+                                    str(findTimeDifference(occurrence[1:]))])
 
 
 def runGUIWindow() -> None:
@@ -170,7 +188,7 @@ def runGUIWindow() -> None:
     window = userInputWindowLayOut()
     while True:
         event, values = window.read()
-        print(event, values)
+        # print(event, values) # used for debugging purposes
         if event == sg.WIN_CLOSED or event == 'Exit':
             break
         if event == 'Search':
@@ -178,7 +196,8 @@ def runGUIWindow() -> None:
             firstKeyWord = values['-FIRSTKEYWORD-']
             lastKeyWord = values['-LASTKEYWORD-']
             listOfOccurrences = readLogs(selectedFiles, firstKeyWord, lastKeyWord)
-            writeTimeStampsToFile(listOfOccurrences)
+            writeToFile(listOfOccurrences)
+            scanCompleteWindow().read(close=True)       # Shows a window pop up confirming the scan is complete
 
 
 if __name__ == "__main__":
