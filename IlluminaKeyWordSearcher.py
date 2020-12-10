@@ -48,8 +48,8 @@ def userInputWindowLayOut() -> sg.Window:
     """
 
     layout = [[sg.Text("Select a folder containing all of the log reports")],
-              [sg.Text("Folder", size=(10, 1)), sg.Input(key='-FOLDER-'),
-               sg.FilesBrowse()],
+              [sg.Text("File(s)", size=(10, 1)), sg.Input(visible=False, key='-FILES-'),
+               sg.FilesBrowse(button_text='Browse',enable_events=True)],
               [sg.Text("Input the first keyword to search for the first occurrence")],
               [sg.Text("Key Word 1", size=(10, 1)), sg.Input(default_text="ix_lgm_power_set_blocking",
                                                              key='-FIRSTKEYWORD-')],
@@ -57,7 +57,10 @@ def userInputWindowLayOut() -> sg.Window:
               [sg.Text("Key Word 2", size=(10, 1)), sg.Input(default_text="ix_lgm_power_rsp",
                                                              key='-LASTKEYWORD-')],
               [sg.Submit(button_text="Search", tooltip="Runs a search with the given parameters"),
-               sg.Exit(tooltip="Closes and exits the program"), sg.Submit()]]
+               sg.Exit(tooltip="Closes and exits the program")]]
+
+            # 'ix_lgm_power_set_blocking' and 'ix_lgm_power_rsp' are set as default values for
+            # key word 1 and key word 2. EDIT LATER
 
     return sg.Window('Key Words Search', layout)        # Window is titled, and has the given layout
 
@@ -76,24 +79,30 @@ def formatTime() -> str:
     return localTime.isoformat(timespec='seconds').replace(':', '')
 
 
-def readLogs(folderPath: str, firstKeyWord: str, lastKeyWord: str) -> List[Tuple[str, str]]:
-    """Given a directory and two keywords, creates and returns a list of all of the occurrences.
+def readLogs(listOfLogStringPaths: list, firstKeyWord: str, lastKeyWord: str) -> List[Tuple[str, str]]:
+    """Given a list of log file string paths and two keywords, creates and returns a list of \
+    all of the occurrences of the two keywords (first occurrence and last occurrence respectively).
 
-    folderPath - (string) - the path of the folder.
+    listOfLogStringPaths - (list) - list of string paths to selected log files.
     firstKeyWord - (string) - the first key word we are interested in.
     lastKeyWord - (string) -the last key word we are interested in.
 
-    Iterate through the files in the given directory and create a list of all of the occurrences by \
-    calling findFirstFindLastDates() on each file. Returns a list of 2-tuples of the string dates.
+    Iterate through the log files string paths in the given list calling findFirstFindLastDates() on each log.
+    Store each set of occurrences and return a list of 2-tuples of the first and last occurrences.
     """
 
     listOfOccurrences = []
-    with os.scandir(folderPath) as directory:   # os.scandir() opens the directory as an iterable object
-        for logFile in directory:               # iterates over the log files in the directory
-            if logFile.is_file() and logFile.name.endswith('.log'):     # ensures logFile is a .log file
-                occurrence = findFirstFindLastDates(logFile, firstKeyWord, lastKeyWord)
-                if None not in occurrence:      # checks that both occurrences exist
-                    listOfOccurrences.append(occurrence)
+    for logStringPath in listOfLogStringPaths:
+        if os.path.isfile(logStringPath) and logStringPath.endswith('.log'):  # ensures path is to a .log file
+            occurrence = findFirstFindLastDates(logStringPath, firstKeyWord, lastKeyWord)
+            if None not in occurrence:  # checks that both occurrences exist
+                listOfOccurrences.append(occurrence)
+        # with os.scandir(logStringPath) as logFile:
+        #     for logFile in filePath:               # iterates over the log files in the directory
+        #         if logFile.is_file() and logFile.name.endswith('.log'):     # ensures logFile is a .log file
+        #             occurrence = findFirstFindLastDates(logFile, firstKeyWord, lastKeyWord)
+        #             if None not in occurrence:      # checks that both occurrences exist
+        #                 listOfOccurrences.append(occurrence)
 
     return listOfOccurrences    # returns a list of 2-tuples containing the string dates of the occurrences
 
@@ -161,13 +170,14 @@ def runGUIWindow() -> None:
     window = userInputWindowLayOut()
     while True:
         event, values = window.read()
+        print(event, values)
         if event == sg.WIN_CLOSED or event == 'Exit':
             break
         if event == 'Search':
-            directory = values['-FOLDER-']
+            selectedFiles = values['-FILES-'].split(';')
             firstKeyWord = values['-FIRSTKEYWORD-']
             lastKeyWord = values['-LASTKEYWORD-']
-            listOfOccurrences = readLogs(directory, firstKeyWord, lastKeyWord)
+            listOfOccurrences = readLogs(selectedFiles, firstKeyWord, lastKeyWord)
             writeTimeStampsToFile(listOfOccurrences)
 
 
